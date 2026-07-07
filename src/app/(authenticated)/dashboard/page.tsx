@@ -20,8 +20,11 @@ import {
   CheckCircle,
   Clock,
   ExternalLink,
-  Info
+  Info,
+  Accessibility
 } from "lucide-react";
+import AIInsightsCard from "@/components/AIInsightsCard";
+import NotificationCenter from "@/components/NotificationCenter";
 
 interface ServiceItem {
   id: string;
@@ -73,6 +76,8 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
   const [savedServices, setSavedServices] = useState<string[]>(["digilocker", "uidai"]);
+  const [isHighContrast, setIsHighContrast] = useState(false);
+  const [isLargeFont, setIsLargeFont] = useState(false);
 
   // Set greeting based on time of day
   useEffect(() => {
@@ -81,8 +86,22 @@ export default function DashboardPage() {
     else if (hour < 17) setGreeting("Good Afternoon");
     else setGreeting("Good Evening");
 
+    const storedContrast = window.localStorage.getItem("janmitra_high_contrast") === "true";
+    const storedLargeFont = window.localStorage.getItem("janmitra_large_font") === "true";
+    setIsHighContrast(storedContrast);
+    setIsLargeFont(storedLargeFont);
+    document.documentElement.classList.toggle("high-contrast", storedContrast);
+    document.body.classList.toggle("large-font", storedLargeFont);
+
     refreshComplaints();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("high-contrast", isHighContrast);
+    document.body.classList.toggle("large-font", isLargeFont);
+    window.localStorage.setItem("janmitra_high_contrast", String(isHighContrast));
+    window.localStorage.setItem("janmitra_large_font", String(isLargeFont));
+  }, [isHighContrast, isLargeFont]);
 
   const toggleSaveService = (serviceId: string) => {
     if (savedServices.includes(serviceId)) {
@@ -103,8 +122,8 @@ export default function DashboardPage() {
     { label: "Government Services", desc: "Explore civic portals", href: "#services-section", icon: FolderLock, color: "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-500/20" },
     { label: "Report Public Issue", desc: "File civic complaints", href: "/report", icon: AlertTriangle, color: "bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400 border-rose-500/20" },
     { label: "Complaint Tracker", desc: "Check status of reports", href: "/tracker", icon: ShieldCheck, color: "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/20" },
-    { label: "Life Event Assistant", desc: "Checklist helpers", href: "/ai-assistant?assistant=life-event", icon: UserCheck, color: "bg-violet-500/10 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400 border-violet-500/20" },
-    { label: "My Civic Journey", desc: "Points, milestones, badge logs", href: "/tracker?tab=journey", icon: Route, color: "bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 border-indigo-500/20" },
+    { label: "Life Event Assistant", desc: "Checklist helpers", href: "/life-event", icon: UserCheck, color: "bg-violet-500/10 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400 border-violet-500/20" },
+    { label: "My Civic Journey", desc: "Points, milestones, badge logs", href: "/journey", icon: Route, color: "bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 border-indigo-500/20" },
   ];
 
   const filterServices = RECOMMENDED_SERVICES.filter((service) =>
@@ -132,6 +151,25 @@ export default function DashboardPage() {
           <span className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-800">
             {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </span>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={isHighContrast}
+              onClick={() => setIsHighContrast((value) => !value)}
+              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              <Accessibility className="h-4 w-4" /> High contrast
+            </button>
+            <button
+              type="button"
+              aria-pressed={isLargeFont}
+              onClick={() => setIsLargeFont((value) => !value)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              A+ / A-
+            </button>
+          </div>
 
           {/* Notification Button */}
           <button
@@ -235,41 +273,7 @@ export default function DashboardPage() {
         {/* Left Column: AI Recommendations & Recent Activity */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* AI Recommendations Card */}
-          <div className="md-card p-6 bg-gradient-to-br from-indigo-50/40 via-white to-blue-50/30 dark:from-indigo-950/20 dark:via-slate-900 dark:to-slate-900 border-indigo-200/50 dark:border-indigo-950/50 shadow-sm relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-            <div className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 mb-4">
-              <Sparkles className="w-5 h-5 fill-current" />
-              <h3 className="font-bold text-base font-display">Personalized AI Insights</h3>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3 p-3 bg-white/70 dark:bg-slate-900/60 border border-indigo-100 dark:border-indigo-950 rounded-2xl">
-                <Info className="w-5 h-5 text-indigo-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Stipend/Scholarship Alert</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Based on your profile occupation (<span className="font-semibold">{profile?.occupation || "Citizen"}</span>), you qualify for the <span className="font-semibold text-slate-700 dark:text-slate-300">National Scholarship Portal</span> scheme. Apply prior to August 1st.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3 p-3 bg-white/70 dark:bg-slate-900/60 border border-indigo-100 dark:border-indigo-950 rounded-2xl">
-                <Sparkles className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Local Scheme Match</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    As a resident of <span className="font-semibold">{profile?.district}</span>, the new State Energy Subsidy Scheme registration is live. File online to claim up to 15% discount.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <Link href="/ai-assistant" className="mt-4 flex items-center space-x-1.5 text-xs font-bold text-primary dark:text-primary-dark hover:underline">
-              <span>Ask Mitra AI Companion</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+          <AIInsightsCard />
 
           {/* Recent Activity Feed */}
           <div className="md-card p-6">
@@ -356,6 +360,8 @@ export default function DashboardPage() {
               <span>Manage Complaints ({complaints.length})</span>
             </Link>
           </div>
+
+          <NotificationCenter />
         </div>
       </div>
 

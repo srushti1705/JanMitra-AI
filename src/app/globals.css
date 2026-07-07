@@ -66,6 +66,38 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
+body.large-font {
+  font-size: 110%;
+}
+
+body.large-font p,
+body.large-font span,
+body.large-font button,
+body.large-font input,
+body.large-font a {
+  line-height: 1.6;
+}
+
+html.high-contrast body {
+  background-color: #000;
+  color: #fff;
+}
+
+html.high-contrast .md-card,
+html.high-contrast .rounded-\[32px\],
+html.high-contrast .rounded-\[24px\],
+html.high-contrast .rounded-2xl,
+html.high-contrast .rounded-3xl {
+  background-color: #111827;
+  border-color: #facc15;
+  color: #fff;
+}
+
+html.high-contrast a,
+html.high-contrast button {
+  color: #fef3c7;
+}
+
 /* Material Design Card styling utilities */
 .md-card {
   background-color: #ffffff;
