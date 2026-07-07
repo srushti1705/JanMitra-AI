@@ -94,7 +94,12 @@ export default function DocumentAssistant() {
         uploadedAt: new Date().toISOString(),
       };
 
-      await addDoc(collection(db, "documents"), newRecord);
+      const firestoreRecord = {
+        ...newRecord,
+        missingDocuments: newRecord.missingDocuments ?? [],
+        summary: newRecord.summary ?? "",
+      };
+      await addDoc(collection(db, "documents"), firestoreRecord);
       setDocuments((prev) => [{ id: documentId, ...newRecord }, ...prev]);
       setAnalysis("Document uploaded successfully. AI review is being generated.");
     } catch (error) {

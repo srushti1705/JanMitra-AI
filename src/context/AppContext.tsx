@@ -163,7 +163,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               photoURL: firebaseUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${firebaseUser.uid}`,
               createdAt: new Date().toISOString(),
             };
-            await setDoc(userDocRef, newProfile);
+            const sanitizedProfile = Object.fromEntries(
+              Object.entries(newProfile).filter(([, value]) => value !== undefined)
+            );
+            await setDoc(userDocRef, sanitizedProfile);
             setProfile(newProfile);
           }
           await fetchUserComplaints(firebaseUser.uid);
@@ -270,7 +273,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...profileData,
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, "users", newUser.uid), newProfile);
+      const sanitizedProfileData = Object.fromEntries(
+        Object.entries(newProfile).filter(([, value]) => value !== undefined)
+      );
+      await setDoc(doc(db, "users", newUser.uid), sanitizedProfileData);
       setProfile(newProfile);
       router.push("/dashboard");
     } catch (e) {
@@ -391,7 +397,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reporterName: profile.fullName,
         reporterId: user.uid,
         userId: user.uid,
-        imageUrl,
         complaintId,
         createdAt,
         updatedAt: createdAt,
@@ -405,7 +410,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ],
       };
 
-      await addDoc(collection(db, "complaints"), newComplaint);
+      const firestoreComplaint = Object.fromEntries(
+        Object.entries(newComplaint).filter(([, value]) => value !== undefined)
+      );
+      if (imageUrl) {
+        firestoreComplaint.imageUrl = imageUrl;
+      }
+      await addDoc(collection(db, "complaints"), firestoreComplaint);
       setComplaints((prev) => [newComplaint, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       addNotification({
         title: "Complaint submitted",

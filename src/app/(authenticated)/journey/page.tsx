@@ -1,5 +1,5 @@
-import MyCivicJourney from "@/components/MyCivicJourney";
+import { redirect } from "next/navigation";
 
 export default function JourneyPage() {
-  return <MyCivicJourney />;
+  redirect("/dashboard");
 }

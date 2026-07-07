@@ -411,14 +411,16 @@ export default function AICivicCompanion() {
         createdAt: new Date().toISOString(),
       };
 
-      await addDoc(collection(db, "messages"), {
+      const userMessagePayload = {
         threadId,
         userId: user.uid,
         role: "user",
         content: trimmedPrompt,
         createdAt: now,
-        imageUrl: previewImage?.dataUrl,
-      });
+        ...(previewImage?.dataUrl ? { imageUrl: previewImage.dataUrl } : {}),
+      };
+
+      await addDoc(collection(db, "messages"), userMessagePayload);
 
       await addDoc(collection(db, "messages"), {
         threadId,

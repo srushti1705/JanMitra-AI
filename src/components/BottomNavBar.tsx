@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MessageSquare, AlertCircle, LayoutDashboard, User, Settings, Briefcase, FileText } from "lucide-react";
+import { Home, MessageSquare, AlertCircle, User, Briefcase } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 
 export default function BottomNavBar() {
@@ -17,7 +17,6 @@ export default function BottomNavBar() {
     { label: "Services", href: "/services", icon: Briefcase },
     { label: "AI Assistant", href: "/ai-assistant", icon: MessageSquare },
     { label: "Report", href: "/report", icon: AlertCircle, isFab: true },
-    { label: "Documents", href: "/documents", icon: FileText },
     { label: "Profile", href: "/profile", icon: User },
   ];
 
@@ -139,20 +138,6 @@ export default function BottomNavBar() {
           })}
         </div>
 
-        {/* Footer / Quick Settings Access */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-          <Link
-            href="/settings"
-            className={`flex items-center space-x-4 px-4 py-3 rounded-2xl font-medium transition-all duration-200 ${
-              isActive("/settings")
-                ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 font-semibold"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200"
-            }`}
-          >
-            <Settings className={`w-5 h-5 ${isActive("/settings") ? "text-primary dark:text-primary-dark" : "text-slate-500 dark:text-slate-400"}`} />
-            <span className="text-sm">Settings</span>
-          </Link>
-        </div>
       </aside>
     </>
   );

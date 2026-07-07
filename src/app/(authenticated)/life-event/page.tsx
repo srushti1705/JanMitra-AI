@@ -1,5 +1,5 @@
-import LifeEventAssistant from "@/components/LifeEventAssistant";
+import { redirect } from "next/navigation";
 
 export default function LifeEventPage() {
-  return <LifeEventAssistant />;
+  redirect("/dashboard");
 }

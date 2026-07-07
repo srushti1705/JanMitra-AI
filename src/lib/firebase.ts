@@ -274,6 +274,40 @@ export async function sendPasswordResetEmail(_auth: any, email: string): Promise
 // FIRESTORE COMPATIBILITY API
 // -------------------------------------------------------------
 
+function sanitizeForFirestore(value: any, key?: string): any {
+  if (value === undefined) {
+    if (key === "imageUrl") {
+      return undefined;
+    }
+    return null;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForFirestore(item)).filter((item) => item !== undefined);
+  }
+
+  if (typeof value === "object") {
+    const cleaned: Record<string, any> = {};
+    for (const [entryKey, entryValue] of Object.entries(value)) {
+      const sanitized = sanitizeForFirestore(entryValue, entryKey);
+      if (sanitized !== undefined) {
+        cleaned[entryKey] = sanitized;
+      }
+    }
+    return cleaned;
+  }
+
+  return value;
+}
+
+function sanitizePayload(data: any) {
+  return sanitizeForFirestore(data);
+}
+
 export function collection(_db: any, path: string) {
   if (!isMock) {
     return realCollection(realDbInstance!, path);
@@ -301,18 +335,22 @@ export async function setDoc(docRef: any, data: any, options?: any): Promise<voi
   const docId = docRef.id;
   const collections = getLocalStorageItem(`janmitra_firestore_${colPath}`, {});
 
+  const sanitizedData = sanitizePayload(data);
+
   if (options && options.merge) {
-    collections[docId] = { ...collections[docId], ...data, id: docId, updatedAt: new Date().toISOString() };
+    collections[docId] = { ...collections[docId], ...sanitizedData, id: docId, updatedAt: new Date().toISOString() };
   } else {
-    collections[docId] = { ...data, id: docId, updatedAt: new Date().toISOString() };
+    collections[docId] = { ...sanitizedData, id: docId, updatedAt: new Date().toISOString() };
   }
 
   setLocalStorageItem(`janmitra_firestore_${colPath}`, collections);
 }
 
 export async function addDoc(colRef: any, data: any): Promise<any> {
+  const sanitizedData = sanitizePayload(data);
+
   if (!isMock) {
-    return realAddDoc(colRef, data);
+    return realAddDoc(colRef, sanitizedData);
   }
 
   const colPath = colRef.path;
@@ -320,7 +358,7 @@ export async function addDoc(colRef: any, data: any): Promise<any> {
   const collections = getLocalStorageItem(`janmitra_firestore_${colPath}`, {});
 
   const newDoc = {
-    ...data,
+    ...sanitizedData,
     id: docId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -350,8 +388,10 @@ export async function getDoc(docRef: any): Promise<any> {
 }
 
 export async function updateDoc(docRef: any, data: any): Promise<void> {
+  const sanitizedData = sanitizePayload(data);
+
   if (!isMock) {
-    return realUpdateDoc(docRef, data);
+    return realUpdateDoc(docRef, sanitizedData);
   }
 
   const colPath = docRef.collectionPath;
@@ -362,7 +402,7 @@ export async function updateDoc(docRef: any, data: any): Promise<void> {
     throw new Error("document-not-found");
   }
 
-  collections[docId] = { ...collections[docId], ...data, updatedAt: new Date().toISOString() };
+  collections[docId] = { ...collections[docId], ...sanitizedData, updatedAt: new Date().toISOString() };
   setLocalStorageItem(`janmitra_firestore_${colPath}`, collections);
 }
 

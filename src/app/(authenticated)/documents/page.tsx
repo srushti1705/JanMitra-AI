@@ -1,7 +1,5 @@
-"use client";
-
-import DocumentAssistant from "@/components/DocumentAssistant";
+import { redirect } from "next/navigation";
 
 export default function DocumentsPage() {
-  return <DocumentAssistant />;
+  redirect("/dashboard");
 }
