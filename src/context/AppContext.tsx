@@ -16,6 +16,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   addDoc,
   getDocs,
@@ -40,16 +41,34 @@ export interface UserProfile {
 
 export interface CivicComplaint {
   id?: string;
+  complaintId?: string;
   title: string;
   description: string;
   category: string;
   status: "Submitted" | "In Review" | "Assigned" | "In Progress" | "Resolved";
   state: string;
   district: string;
+  locationLabel?: string;
+  latitude?: number;
+  longitude?: number;
+  department?: string;
   reporterName: string;
+  reporterId?: string;
+  userId?: string;
   imageUrl?: string;
   createdAt: string;
+  updatedAt?: string;
+  bookmarked?: boolean;
   updateHistory: { status: string; note: string; date: string }[];
+}
+
+export interface CivicNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: "success" | "info" | "warning";
+  createdAt: string;
+  read: boolean;
 }
 
 interface AppContextType {
@@ -59,6 +78,7 @@ interface AppContextType {
   theme: "light" | "dark";
   language: string;
   complaints: CivicComplaint[];
+  notifications: CivicNotification[];
   isMockMode: boolean;
   toggleTheme: () => void;
   setLanguage: (lang: string) => void;
@@ -68,8 +88,19 @@ interface AppContextType {
   logoutUser: () => Promise<void>;
   updateProfileDetails: (updates: Partial<UserProfile>) => Promise<void>;
   uploadAvatar: (base64DataUrl: string) => Promise<string>;
-  submitComplaint: (title: string, description: string, category: string, base64Image?: string) => Promise<void>;
+  submitComplaint: (
+    title: string,
+    description: string,
+    category: string,
+    base64Image?: string,
+    location?: { label?: string; latitude?: number; longitude?: number; state?: string; district?: string }
+  ) => Promise<CivicComplaint>;
   refreshComplaints: () => Promise<void>;
+  updateComplaintDescription: (complaintId: string, description: string) => Promise<void>;
+  deleteComplaint: (complaintId: string) => Promise<void>;
+  toggleComplaintBookmark: (complaintId: string) => Promise<void>;
+  addNotification: (notification: Omit<CivicNotification, "id" | "createdAt" | "read">) => void;
+  dismissNotification: (notificationId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -81,6 +112,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [language, setLanguageState] = useState<string>("English");
   const [complaints, setComplaints] = useState<CivicComplaint[]>([]);
+  const [notifications, setNotifications] = useState<CivicNotification[]>([]);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -141,6 +173,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null);
         setComplaints([]);
+        setNotifications([]);
       }
       setLoading(false);
 
@@ -165,9 +198,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...doc.data(),
         id: doc.id,
       })) as CivicComplaint[];
-      
-      // Filter user complaints if in mock mode (simulated query), or filter by uid
-      const userComplaints = allComplaints.filter((c) => c.reporterName === uid || c.reporterName === profile?.fullName);
+
+      const userComplaints = allComplaints.filter(
+        (c) => c.userId === uid || c.reporterId === uid || c.reporterName === profile?.fullName
+      );
       setComplaints(userComplaints.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } catch (e) {
       console.error("Error loading complaints:", e);
@@ -309,13 +343,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addNotification = (notification: Omit<CivicNotification, "id" | "createdAt" | "read">) => {
+    const item: CivicNotification = {
+      id: `notif-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      read: false,
+      ...notification,
+    };
+    setNotifications((prev) => [item, ...prev].slice(0, 6));
+  };
+
+  const dismissNotification = (notificationId: string) => {
+    setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
+  };
+
   // Submit Complaint
   const submitComplaint = async (
     title: string,
     description: string,
     category: string,
-    base64Image?: string
-  ) => {
+    base64Image?: string,
+    location?: { label?: string; latitude?: number; longitude?: number; state?: string; district?: string }
+  ): Promise<CivicComplaint> => {
     if (!user || !profile) throw new Error("User not authenticated");
     try {
       let imageUrl = "";
@@ -326,31 +375,99 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         imageUrl = await getDownloadURL(storageRef);
       }
 
+      const createdAt = new Date().toISOString();
+      const complaintId = `CMP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       const newComplaint: CivicComplaint = {
         title,
         description,
         category,
         status: "Submitted",
-        state: profile.state,
-        district: profile.district,
+        state: location?.state || profile.state,
+        district: location?.district || profile.district,
+        locationLabel: location?.label || `${profile.district}, ${profile.state}`,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+        department: "Municipal Corporation",
         reporterName: profile.fullName,
+        reporterId: user.uid,
+        userId: user.uid,
         imageUrl,
-        createdAt: new Date().toISOString(),
+        complaintId,
+        createdAt,
+        updatedAt: createdAt,
+        bookmarked: false,
         updateHistory: [
           {
             status: "Submitted",
             note: "Complaint submitted successfully to JanMitra AI systems.",
-            date: new Date().toISOString(),
+            date: createdAt,
           },
         ],
       };
 
       await addDoc(collection(db, "complaints"), newComplaint);
-      await fetchUserComplaints(user.uid);
+      setComplaints((prev) => [newComplaint, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      addNotification({
+        title: "Complaint submitted",
+        message: `${complaintId} has been logged for civic review.`,
+        type: "success",
+      });
+      return newComplaint;
     } catch (e) {
       console.error("Error submitting complaint:", e);
       throw e;
     }
+  };
+
+  const updateComplaintDescription = async (complaintId: string, nextDescription: string) => {
+    if (!user) throw new Error("User not authenticated");
+    const target = complaints.find((item) => item.id === complaintId);
+    if (!target) throw new Error("Complaint not found");
+
+    const updatedAt = new Date().toISOString();
+    const updatedHistory = [
+      ...target.updateHistory,
+      {
+        status: target.status,
+        note: "Description updated before review by citizen.",
+        date: updatedAt,
+      },
+    ];
+
+    await updateDoc(doc(db, "complaints", complaintId), {
+      description: nextDescription,
+      updatedAt,
+      updateHistory: updatedHistory,
+    });
+
+    setComplaints((prev) => prev.map((item) => (item.id === complaintId ? { ...item, description: nextDescription, updatedAt, updateHistory: updatedHistory } : item)));
+    addNotification({
+      title: "Complaint updated",
+      message: "Your description change has been saved.",
+      type: "info",
+    });
+  };
+
+  const deleteComplaint = async (complaintId: string) => {
+    const target = complaints.find((item) => item.id === complaintId);
+    if (!target || target.status !== "Submitted") {
+      throw new Error("Only submitted complaints can be removed.");
+    }
+    await deleteDoc(doc(db, "complaints", complaintId));
+    setComplaints((prev) => prev.filter((item) => item.id !== complaintId));
+    addNotification({
+      title: "Complaint removed",
+      message: "The draft complaint has been deleted.",
+      type: "warning",
+    });
+  };
+
+  const toggleComplaintBookmark = async (complaintId: string) => {
+    const target = complaints.find((item) => item.id === complaintId);
+    if (!target) return;
+    const nextValue = !target.bookmarked;
+    await updateDoc(doc(db, "complaints", complaintId), { bookmarked: nextValue });
+    setComplaints((prev) => prev.map((item) => (item.id === complaintId ? { ...item, bookmarked: nextValue } : item)));
   };
 
   return (
@@ -362,6 +479,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         theme,
         language,
         complaints,
+        notifications,
         isMockMode: isMock,
         toggleTheme,
         setLanguage,
@@ -373,6 +491,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         uploadAvatar,
         submitComplaint,
         refreshComplaints,
+        updateComplaintDescription,
+        deleteComplaint,
+        toggleComplaintBookmark,
+        addNotification,
+        dismissNotification,
       }}
     >
       {children}

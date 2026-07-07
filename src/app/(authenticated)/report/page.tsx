@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useApp } from "@/context/AppContext";
-import { AlertTriangle, Upload, X, MapPin, Camera, Sparkles, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Upload, X, MapPin, Camera, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
 
 const CATEGORIES = [
   "Potholes & Road Damage",
@@ -17,14 +17,36 @@ const CATEGORIES = [
   "Other Civic Issue"
 ];
 
+const ISSUE_EXAMPLES = [
+  "Potholes",
+  "Garbage Dump",
+  "Water Leakage",
+  "Broken Street Lights",
+  "Illegal Dumping",
+  "Open Manholes",
+  "Damaged Roads",
+  "Fallen Trees",
+  "Traffic Signal Damage",
+  "Public Cleanliness Issues",
+];
+
 export default function ReportPage() {
-  const { profile, submitComplaint } = useApp();
+  const { profile, submitComplaint, addNotification } = useApp();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Potholes & Road Damage");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<null | {
+    issueCategory: string;
+    title: string;
+    description: string;
+    severity: string;
+    department: string;
+    nextSteps: string;
+  }>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -80,6 +102,59 @@ export default function ReportPage() {
     }
   };
 
+  const analyzeImage = async () => {
+    if (!imageBase64) {
+      setError("Upload a clear image first so JanMitra AI can analyze the issue.");
+      return;
+    }
+
+    setAnalyzing(true);
+    setError("");
+    try {
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Analyze this civic issue image. Identify the most likely issue category from this list: ${ISSUE_EXAMPLES.join(", ")}. Return a JSON object with issueCategory, title, description, severity, department, nextSteps. Respond in concise plain text and do not use markdown.`,
+          imageBase64,
+          mimeType: "image/jpeg",
+          language: profile?.preferredLanguage || "English",
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to analyze the uploaded image");
+
+      const parsed = result.text.match(/\{[\s\S]*\}/);
+      if (parsed) {
+        const data = JSON.parse(parsed[0]);
+        setAnalysis({
+          issueCategory: data.issueCategory || category,
+          title: data.title || title,
+          description: data.description || description,
+          severity: data.severity || "Medium",
+          department: data.department || "Municipal Corporation",
+          nextSteps: data.nextSteps || "Inspect the site and coordinate with the relevant department.",
+        });
+        setCategory(data.issueCategory || category);
+        setTitle(data.title || title);
+        setDescription(data.description || description);
+      } else {
+        setAnalysis({
+          issueCategory: category,
+          title: title || "Civic issue report",
+          description: description || "The image suggests a civic issue that should be reviewed.",
+          severity: "Medium",
+          department: "Municipal Corporation",
+          nextSteps: "Inspect the site and coordinate with the relevant department.",
+        });
+      }
+    } catch (error) {
+      setError("JanMitra AI could not analyze the image. You can still submit the report manually.");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
@@ -91,22 +166,20 @@ export default function ReportPage() {
     setError("");
 
     try {
-      await submitComplaint(title, description, category, imageBase64 || undefined);
-      
-      setSuccess(true);
-      
-      // Celebrate
-      const confetti = (await import("canvas-confetti")).default;
-      confetti({
-        particleCount: 100,
-        spread: 60,
-        origin: { y: 0.6 }
+      const complaint = await submitComplaint(title, description, category, imageBase64 || undefined, {
+        label: `${profile?.district || "Central Delhi"}, ${profile?.state || "Delhi"}`,
+        state: profile?.state,
+        district: profile?.district,
       });
-
-      // Redirect after 2s
-      setTimeout(() => {
-        router.push("/tracker");
-      }, 2000);
+      addNotification({
+        title: "Complaint submitted",
+        message: `${complaint.complaintId} is now visible in your tracker.`,
+        type: "success",
+      });
+      setSuccess(true);
+      const confetti = (await import("canvas-confetti")).default;
+      confetti({ particleCount: 80, spread: 50, origin: { y: 0.6 } });
+      setTimeout(() => router.push("/tracker"), 1800);
     } catch (e: any) {
       console.error(e);
       setError(e.message || "Failed to submit public issue. Try again.");
@@ -263,7 +336,6 @@ export default function ReportPage() {
             </div>
           </div>
 
-          {/* Geographic Auto-Tagging Notice */}
           <div className="flex items-start space-x-2.5 p-3.5 bg-slate-100/70 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-650 dark:text-slate-450 text-xs leading-relaxed">
             <MapPin className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
             <div>
@@ -271,7 +343,25 @@ export default function ReportPage() {
             </div>
           </div>
 
-          {/* Submit Button */}
+          {imageBase64 && (
+            <button type="button" onClick={() => void analyzeImage()} disabled={analyzing} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm font-semibold text-primary dark:border-primary-dark/30 dark:bg-primary-dark/10 dark:text-primary-dark">
+              {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {analyzing ? "Analyzing with AI Vision…" : "Analyze with Gemini Vision"}
+            </button>
+          )}
+
+          {analysis && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <p className="font-semibold">AI-generated summary</p>
+              <div className="mt-2 space-y-1">
+                <p><span className="font-semibold">Category:</span> {analysis.issueCategory}</p>
+                <p><span className="font-semibold">Severity:</span> {analysis.severity}</p>
+                <p><span className="font-semibold">Department:</span> {analysis.department}</p>
+                <p><span className="font-semibold">Next steps:</span> {analysis.nextSteps}</p>
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
