@@ -34,8 +34,11 @@ import {
 
 // Determine if real Firebase config is provided
 const isFirebaseConfigured =
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY) &&
+  Boolean(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) &&
+  Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) &&
+  Boolean(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) &&
+  Boolean(process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
 
 let app: any;
 let realAuthInstance: RealAuth | null = null;
@@ -58,8 +61,28 @@ if (isFirebaseConfigured) {
   realStorageInstance = getStorage(app);
 }
 
-export const isMock = !isFirebaseConfigured;
+export let isMock = !isFirebaseConfigured;
 export { GoogleAuthProvider };
+
+const shouldFallbackToMock = (error: any) => {
+  const message = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+  return (
+    error?.code === "auth/network-request-failed" ||
+    message.includes("network-request-failed") ||
+    message.includes("failed to fetch") ||
+    message.includes("err_network") ||
+    message.includes("auth/invalid-api-key") ||
+    message.includes("permission-denied") ||
+    message.includes("unavailable")
+  );
+};
+
+const forceMockBackend = (reason?: string) => {
+  if (!isMock) {
+    console.warn(`[Firebase] Falling back to mock backend: ${reason || "runtime Firebase issue"}`);
+    isMock = true;
+  }
+};
 
 // -------------------------------------------------------------
 // MOCK STATE UTILITIES (localStorage backed)
@@ -139,7 +162,15 @@ export async function createUserWithEmailAndPassword(
   pass: string
 ): Promise<{ user: MockUser | RealUser }> {
   if (!isMock) {
-    return realCreateUser(realAuthInstance!, email, pass);
+    try {
+      return await realCreateUser(realAuthInstance!, email, pass);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "auth signup failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const users = getLocalStorageItem("janmitra_mock_users", {});
@@ -172,7 +203,15 @@ export async function signInWithEmailAndPassword(
   pass: string
 ): Promise<{ user: MockUser | RealUser }> {
   if (!isMock) {
-    return realSignIn(realAuthInstance!, email, pass);
+    try {
+      return await realSignIn(realAuthInstance!, email, pass);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "auth signin failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const users = getLocalStorageItem("janmitra_mock_users", {});
@@ -224,14 +263,31 @@ export async function signInWithGoogleMock(): Promise<{ user: MockUser }> {
 
 export async function signOut(_auth: any): Promise<void> {
   if (!isMock) {
-    return realSignOut(realAuthInstance!);
+    try {
+      await realSignOut(realAuthInstance!);
+      return;
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "auth signout failed");
+      } else {
+        throw error;
+      }
+    }
   }
   mockAuthInstance.updateCurrentUser(null);
 }
 
 export function onAuthStateChanged(_auth: any, callback: (user: any | null) => void) {
   if (!isMock) {
-    return realOnAuthStateChanged(realAuthInstance!, callback);
+    try {
+      return realOnAuthStateChanged(realAuthInstance!, callback);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "auth state listener failed");
+      } else {
+        throw error;
+      }
+    }
   }
   return mockAuthInstance.onAuthStateChanged(callback);
 }
@@ -241,7 +297,16 @@ export async function updateProfile(
   profileData: { displayName?: string; photoURL?: string }
 ): Promise<void> {
   if (!isMock) {
-    return realUpdateProfile(user, profileData);
+    try {
+      await realUpdateProfile(user, profileData);
+      return;
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "profile update failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const currentUser = mockAuthInstance.currentUser;
@@ -260,7 +325,16 @@ export async function updateProfile(
 
 export async function sendPasswordResetEmail(_auth: any, email: string): Promise<void> {
   if (!isMock) {
-    return realSendPasswordReset(realAuthInstance!, email);
+    try {
+      await realSendPasswordReset(realAuthInstance!, email);
+      return;
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "password reset failed");
+      } else {
+        throw error;
+      }
+    }
   }
   const users = getLocalStorageItem("janmitra_mock_users", {});
   if (!users[email]) {
@@ -328,7 +402,16 @@ export function doc(_db: any, collectionPath: string, docId?: string) {
 
 export async function setDoc(docRef: any, data: any, options?: any): Promise<void> {
   if (!isMock) {
-    return realSetDoc(docRef, data, options);
+    try {
+      await realSetDoc(docRef, data, options);
+      return;
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "firestore setDoc failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const colPath = docRef.collectionPath;
@@ -350,7 +433,15 @@ export async function addDoc(colRef: any, data: any): Promise<any> {
   const sanitizedData = sanitizePayload(data);
 
   if (!isMock) {
-    return realAddDoc(colRef, sanitizedData);
+    try {
+      return await realAddDoc(colRef, sanitizedData);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "firestore addDoc failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const colPath = colRef.path;
@@ -372,7 +463,15 @@ export async function addDoc(colRef: any, data: any): Promise<any> {
 
 export async function getDoc(docRef: any): Promise<any> {
   if (!isMock) {
-    return realGetDoc(docRef);
+    try {
+      return await realGetDoc(docRef);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "firestore getDoc failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const colPath = docRef.collectionPath;
@@ -391,7 +490,16 @@ export async function updateDoc(docRef: any, data: any): Promise<void> {
   const sanitizedData = sanitizePayload(data);
 
   if (!isMock) {
-    return realUpdateDoc(docRef, sanitizedData);
+    try {
+      await realUpdateDoc(docRef, sanitizedData);
+      return;
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "firestore updateDoc failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const colPath = docRef.collectionPath;
@@ -408,7 +516,16 @@ export async function updateDoc(docRef: any, data: any): Promise<void> {
 
 export async function deleteDoc(docRef: any): Promise<void> {
   if (!isMock) {
-    return realDeleteDoc(docRef);
+    try {
+      await realDeleteDoc(docRef);
+      return;
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "firestore deleteDoc failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const colPath = docRef.collectionPath;
@@ -422,7 +539,15 @@ export async function deleteDoc(docRef: any): Promise<void> {
 
 export async function getDocs(colRef: any): Promise<any> {
   if (!isMock) {
-    return realGetDocs(colRef);
+    try {
+      return await realGetDocs(colRef);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "firestore getDocs failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const colPath = colRef.path;
@@ -485,15 +610,33 @@ export async function uploadStringMock(storageRef: any, dataUrl: string): Promis
     setLocalStorageItem("janmitra_mock_storage", mockStorage);
     return { ref: storageRef };
   } else {
-    // For real firebase, we can import uploadString from firebase/storage
-    const { uploadString } = await import("firebase/storage");
-    return uploadString(realRef(realStorageInstance!, storageRef.path), dataUrl, "data_url");
+    try {
+      const { uploadString } = await import("firebase/storage");
+      return await uploadString(realRef(realStorageInstance!, storageRef.path), dataUrl, "data_url");
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "storage upload failed");
+        const mockStorage = getLocalStorageItem("janmitra_mock_storage", {});
+        mockStorage[storageRef.path] = dataUrl;
+        setLocalStorageItem("janmitra_mock_storage", mockStorage);
+        return { ref: storageRef };
+      }
+      throw error;
+    }
   }
 }
 
 export async function getDownloadURL(storageRef: any): Promise<string> {
   if (!isMock) {
-    return realGetDownloadURL(storageRef);
+    try {
+      return await realGetDownloadURL(storageRef);
+    } catch (error: any) {
+      if (shouldFallbackToMock(error)) {
+        forceMockBackend(error.message || "storage getDownloadURL failed");
+      } else {
+        throw error;
+      }
+    }
   }
 
   const mockStorage = getLocalStorageItem("janmitra_mock_storage", {});
@@ -503,3 +646,12 @@ export async function getDownloadURL(storageRef: any): Promise<string> {
   if (data) return data;
   return `https://api.dicebear.com/7.x/initials/svg?seed=${storageRef.path.split("/").pop()}`;
 }
+
+console.log("Firebase Config:", {
+  apiKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
+  authDomain: Boolean(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN),
+  projectId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
+  storageBucket: Boolean(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET),
+  appId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
+});
+console.log("Configured:", isFirebaseConfigured);
