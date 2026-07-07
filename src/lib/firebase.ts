@@ -21,6 +21,7 @@ import {
   getDocs as realGetDocs,
   addDoc as realAddDoc,
   updateDoc as realUpdateDoc,
+  deleteDoc as realDeleteDoc,
   Firestore as RealFirestore
 } from "firebase/firestore";
 import {
@@ -363,6 +364,20 @@ export async function updateDoc(docRef: any, data: any): Promise<void> {
 
   collections[docId] = { ...collections[docId], ...data, updatedAt: new Date().toISOString() };
   setLocalStorageItem(`janmitra_firestore_${colPath}`, collections);
+}
+
+export async function deleteDoc(docRef: any): Promise<void> {
+  if (!isMock) {
+    return realDeleteDoc(docRef);
+  }
+
+  const colPath = docRef.collectionPath;
+  const docId = docRef.id;
+  const collections = getLocalStorageItem(`janmitra_firestore_${colPath}`, {});
+  if (collections[docId]) {
+    delete collections[docId];
+    setLocalStorageItem(`janmitra_firestore_${colPath}`, collections);
+  }
 }
 
 export async function getDocs(colRef: any): Promise<any> {
