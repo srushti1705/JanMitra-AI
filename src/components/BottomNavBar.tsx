@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MessageSquare, AlertCircle, LayoutDashboard, User, Settings } from "lucide-react";
+import { Home, MessageSquare, AlertCircle, LayoutDashboard, User, Settings, Briefcase, FileText } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 
 export default function BottomNavBar() {
@@ -14,9 +14,10 @@ export default function BottomNavBar() {
 
   const navItems = [
     { label: "Home", href: "/dashboard", icon: Home },
+    { label: "Services", href: "/services", icon: Briefcase },
     { label: "AI Assistant", href: "/ai-assistant", icon: MessageSquare },
     { label: "Report", href: "/report", icon: AlertCircle, isFab: true },
-    { label: "Dashboard", href: "/tracker", icon: LayoutDashboard },
+    { label: "Documents", href: "/documents", icon: FileText },
     { label: "Profile", href: "/profile", icon: User },
   ];
 
